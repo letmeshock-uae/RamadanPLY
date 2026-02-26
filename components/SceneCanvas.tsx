@@ -4,7 +4,6 @@ import * as THREE from 'three';
 import { createRenderer } from '@/lib/three/createRenderer';
 import { createCameraRig } from '@/lib/three/createCameraRig';
 import { createLights } from '@/lib/three/createLights';
-import { fitCameraToBounds } from '@/lib/three/fitCameraToBounds';
 import { loadPly } from '@/lib/ply/loadPly';
 import { SplatRenderer } from '@/lib/three/splat/SplatRenderer';
 
@@ -41,7 +40,6 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
     const ro = new ResizeObserver(onResize);
     ro.observe(canvas);
 
-    // ─── Loader placeholder ───────────────────────────────────────────────
     let splatRenderer: SplatRenderer | null = null;
     let pointCloud: THREE.Points | null = null;
 
@@ -64,13 +62,10 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
         const z = arrays['z'] ?? new Float32Array(0);
         const pos = new Float32Array(vertexCount * 3);
         for (let i = 0; i < vertexCount; i++) {
-          pos[i * 3] = x[i];
-          pos[i * 3 + 1] = y[i];
-          pos[i * 3 + 2] = z[i];
+          pos[i * 3] = x[i]; pos[i * 3 + 1] = y[i]; pos[i * 3 + 2] = z[i];
         }
         geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 
-        // Color attribute if present
         const r = arrays['red'] ?? arrays['diffuse_red'];
         const g = arrays['green'] ?? arrays['diffuse_green'];
         const b = arrays['blue'] ?? arrays['diffuse_blue'];
@@ -78,7 +73,7 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
           const col = new Float32Array(vertexCount * 3);
           const isUchar = r[0] > 1.0;
           for (let i = 0; i < vertexCount; i++) {
-            col[i * 3] = isUchar ? r[i] / 255 : r[i];
+            col[i * 3]     = isUchar ? r[i] / 255 : r[i];
             col[i * 3 + 1] = isUchar ? g[i] / 255 : g[i];
             col[i * 3 + 2] = isUchar ? b[i] / 255 : b[i];
           }
@@ -97,16 +92,39 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
         scene.add(pointCloud);
       }
 
-      // Fit camera to scene bounds
-      const box = new THREE.Box3().setFromObject(is3dgs ? splatRenderer!.mesh : pointCloud!);
+      // ─── Fit camera to actual scene bounds ────────────────────────────
+      const targetObj = is3dgs ? splatRenderer!.mesh : pointCloud!;
+      const box = new THREE.Box3().setFromObject(targetObj);
+
       if (!box.isEmpty()) {
-        fitCameraToBounds(camera, box);
+        const center = new THREE.Vector3();
+        const size = new THREE.Vector3();
+        box.getCenter(center);
+        box.getSize(size);
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fovRad = camera.fov * (Math.PI / 180);
+        // Distance to frame the whole scene with 40% padding
+        const orbitRadius = (maxDim / 2 / Math.tan(fovRad / 2)) * 1.4;
+
+        // Update rig orbit so animation keeps the scene in view
+        rig.setOrbit(center, orbitRadius);
+
+        // Update clip planes for this scene scale
+        camera.near = orbitRadius / 100;
+        camera.far  = orbitRadius * 100;
+        camera.updateProjectionMatrix();
+
+        // Let SplatRenderer know the scene scale so it can size points correctly
+        if (splatRenderer) {
+          splatRenderer.setPointScale(maxDim * 0.5);
+        }
       }
 
       onLoad?.();
     } catch (err) {
       console.error('[SceneCanvas] PLY load error:', err);
-      onLoad?.(); // hide loader even on error
+      onLoad?.();
     }
 
     // ─── Render loop ──────────────────────────────────────────────────────
@@ -125,9 +143,7 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
       const elapsed = clock.getElapsedTime();
       updateCamera(elapsed, reducedMotion);
 
-      if (splatRenderer) {
-        splatRenderer.sort(camera);
-      }
+      if (splatRenderer) splatRenderer.sort(camera);
 
       renderer.render(scene, camera);
     }
