@@ -67,11 +67,17 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
         if (!isMounted) return;
         console.log('[Scene] Mkkellogg PLY loaded');
 
-        const maxDim = 5; // Approximate scale
+        // We want the model to be larger and lower on the screen.
+        // maxDim is just an arbitrary scale factor here.
+        const maxDim = 5;
         const fovRad = camera.fov * (Math.PI / 180);
-        const orbitRadius = (maxDim / 2 / Math.tan(fovRad / 2)) * 1.4;
 
-        const center = new THREE.Vector3(0, maxDim * 0.15, 0);
+        // Lower multiplier for orbitRadius makes the camera closer (model bigger)
+        const orbitRadius = (maxDim / 2 / Math.tan(fovRad / 2)) * 0.7;
+
+        // Lower the Y center of the camera target so the model drops down
+        // Positive Y center means camera looks UP, pushing the model DOWN.
+        const center = new THREE.Vector3(0, maxDim * 0.4, 0);
 
         rig.setOrbit(center, orbitRadius);
 
