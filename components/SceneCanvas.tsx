@@ -73,13 +73,13 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
         const fovRad = camera.fov * (Math.PI / 180);
 
         // Lower multiplier for orbitRadius makes the camera closer (model bigger)
-        // Set to 0.45 to make it really large (half screen height)
-        const orbitRadius = (maxDim / 2 / Math.tan(fovRad / 2)) * 0.45;
+        // Set to 0.22 to make it HUGE (fills the screen / twice as big)
+        const orbitRadius = (maxDim / 2 / Math.tan(fovRad / 2)) * 0.22;
 
         // Offset center to position the model vertically
         // Positive Y center means camera looks UP, pushing the model DOWN.
-        // We reduce this from 0.4 to 0.05 so it sits much higher, just poking out the bottom
-        const center = new THREE.Vector3(0, maxDim * 0.05, 0);
+        // Adjusted slightly up for the tighter zoom.
+        const center = new THREE.Vector3(0, maxDim * 0.12, 0);
 
         rig.setOrbit(center, orbitRadius);
 
