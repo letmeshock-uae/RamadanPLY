@@ -78,8 +78,9 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
 
         // Offset center to position the model vertically
         // Positive Y center means camera looks UP, pushing the model DOWN.
-        // Adjusted slightly up for the tighter zoom.
-        const center = new THREE.Vector3(0, maxDim * 0.12, 0);
+        // Decrease Y center to move the model UP.
+        // -0.1 should roughly move it up by a noticeable margin (~20-300px depending on screen height)
+        const center = new THREE.Vector3(0, maxDim * -0.1, 0);
 
         rig.setOrbit(center, orbitRadius);
 
