@@ -92,11 +92,15 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
         scene.add(pointCloud);
       }
 
+      console.log(`[Scene] PLY loaded: ${vertexCount} vertices, is3dgs=${is3dgs}`);
+
       // ─── Fit camera to actual scene bounds ────────────────────────────
       const targetObj = is3dgs ? splatRenderer!.mesh : pointCloud!;
       const box = new THREE.Box3().setFromObject(targetObj);
 
-      if (!box.isEmpty()) {
+      if (box.isEmpty()) {
+        console.warn('[Scene] Bounding box is empty — no geometry found');
+      } else {
         const center = new THREE.Vector3();
         const size = new THREE.Vector3();
         box.getCenter(center);
@@ -106,6 +110,12 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
         const fovRad = camera.fov * (Math.PI / 180);
         // Distance to frame the whole scene with 40% padding
         const orbitRadius = (maxDim / 2 / Math.tan(fovRad / 2)) * 1.4;
+
+        console.log(
+          `[Scene] bbox size=(${size.x.toFixed(3)},${size.y.toFixed(3)},${size.z.toFixed(3)})` +
+          ` center=(${center.x.toFixed(3)},${center.y.toFixed(3)},${center.z.toFixed(3)})` +
+          ` orbitRadius=${orbitRadius.toFixed(4)}`
+        );
 
         // Update rig orbit so animation keeps the scene in view
         rig.setOrbit(center, orbitRadius);
@@ -118,6 +128,7 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
         // Let SplatRenderer know the scene scale so it can size points correctly
         if (splatRenderer) {
           splatRenderer.setPointScale(maxDim * 0.5);
+          console.log(`[Scene] uPointScale set for maxDim=${maxDim.toFixed(4)}`);
         }
       }
 
