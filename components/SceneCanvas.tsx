@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { createRenderer } from '@/lib/three/createRenderer';
 import { createCameraRig } from '@/lib/three/createCameraRig';
 import { createLights } from '@/lib/three/createLights';
-import { LumaSplatsThree } from '@lumaai/luma-web';
+import * as GaussianSplats3D from '@mkkellogg/gaussian-splats-3d';
 
 interface SceneCanvasProps {
   reducedMotion: boolean;
@@ -42,7 +42,7 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
     const ro = new ResizeObserver(onResize);
     ro.observe(canvas);
 
-    let splats: LumaSplatsThree | null = null;
+    let splats: GaussianSplats3D.DropInViewer | null = null;
     let paused = false;
 
     function onVisibility() {
@@ -50,28 +50,23 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
     }
     document.addEventListener('visibilitychange', onVisibility);
 
-    // ─── Load Luma Splats ─────────────────────────────────────────────────
+    // ─── Load Gaussian Splats ─────────────────────────────────────────────
     try {
-      // Use LumaSplatsThree with loading from our public models folder
-      splats = new LumaSplatsThree({
-        source: '/models/scene.ply',
-        enableThreeShaderIntegration: false, // For better performance if not using standard materials
-        loadingAnimationEnabled: false
-      });
+      // Use DropInViewer which extends THREE.Group
+      splats = new GaussianSplats3D.DropInViewer();
 
       // Flip the model 180 degrees like in the previous implementation
       splats.rotation.z = Math.PI;
 
       scene.add(splats);
 
-      // Once loaded, adjust camera
-      splats.onLoad = () => {
+      // Load generic PLY file
+      splats.addSplatScene('/models/scene.ply', {
+        progressiveLoad: true
+      }).then(() => {
         if (!isMounted) return;
+        console.log('[Scene] Mkkellogg PLY loaded');
 
-        console.log('[Scene] Luma PLY loaded');
-
-        // Luma handles its own bounding box calculation internally, but we can 
-        // approximate a good view or use a default
         const maxDim = 5; // Approximate scale
         const fovRad = camera.fov * (Math.PI / 180);
         const orbitRadius = (maxDim / 2 / Math.tan(fovRad / 2)) * 1.4;
@@ -85,10 +80,13 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
         camera.updateProjectionMatrix();
 
         onLoad?.();
-      };
+      }).catch((err: any) => {
+        console.error('[SceneCanvas] Mkkellogg Splat load error:', err);
+        onLoad?.();
+      });
 
     } catch (err) {
-      console.error('[SceneCanvas] Luma Splat load error:', err);
+      console.error('[SceneCanvas] Splat init error:', err);
       onLoad?.();
     }
 
