@@ -139,7 +139,7 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
     }
 
     // ─── Render loop ──────────────────────────────────────────────────────
-    const clock = new THREE.Clock();
+    const startTime = performance.now();
     let paused = false;
 
     function onVisibility() {
@@ -151,7 +151,7 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
       animId = requestAnimationFrame(animate);
       if (paused) return;
 
-      const elapsed = clock.getElapsedTime();
+      const elapsed = (performance.now() - startTime) / 1000;
       updateCamera(elapsed, reducedMotion);
 
       if (splatRenderer) splatRenderer.sort(camera);

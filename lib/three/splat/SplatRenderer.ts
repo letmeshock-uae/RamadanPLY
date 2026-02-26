@@ -1,37 +1,29 @@
 /**
  * SplatRenderer — renders 3D Gaussian Splats as camera-facing billboard quads.
  *
- * Strategy:
- *   - Each gaussian = 4 vertices (quad).
- *   - Corner offsets stored in the `normal` attribute (xy = [-1,1]).
- *   - Scale stored as exp(max(scale_0, scale_1, scale_2)) — the largest axis.
- *   - uPointScale uniform set externally via setPointScale() to match scene size.
- *   - Back-to-front sorting every SORT_INTERVAL frames.
+ * Uses THREE.ShaderMaterial (not Raw) so that three.js automatically:
+ *   - injects modelViewMatrix, projectionMatrix, position, normal uniforms/attrs
+ *   - handles WebGL2 / GLSL 3.00 ES compatibility (#define attribute in, etc.)
+ *   - provides gl_FragColor via the pc_fragColor alias
  *
- * Blending:
- *   - depthWrite: false, depthTest: true — correct for translucent splats.
- *   - Premultiplied alpha (src=ONE, dst=ONE_MINUS_SRC_ALPHA).
+ * Blending: premultiplied alpha (src=ONE, dst=ONE_MINUS_SRC_ALPHA).
+ * depthWrite: false — splats don't occlude each other.
+ * Back-to-front sorting every SORT_INTERVAL frames.
  */
 import * as THREE from 'three';
 
 const SORT_INTERVAL = 8;
 
 // ─── Vertex Shader ────────────────────────────────────────────────────────────
-// Expands each point into a camera-facing quad.
-// aspect correction: projectionMatrix[1][1]/projectionMatrix[0][0] = width/height
-// ensures the billboard is circular in screen pixels.
+// ShaderMaterial auto-provides: modelViewMatrix, projectionMatrix,
+//   attribute vec3 position, attribute vec3 normal (when geometry has it).
+// We repurpose 'normal' as the per-corner [-1,1] offset.
 const vertexShader = /* glsl */ `
-precision highp float;
-
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
 uniform float uPointScale;
 
-attribute vec3 position;
-attribute vec3 normal;    // xy = corner offset [-1,1], z unused
 attribute vec3 aColor;
 attribute float aOpacity;
-attribute float aScale;   // world-space half-width of this gaussian
+attribute float aScale;
 
 varying vec2 vUv;
 varying vec3 vColor;
@@ -40,16 +32,16 @@ varying float vOpacity;
 void main() {
   vColor   = aColor;
   vOpacity = aOpacity;
-  vUv      = normal.xy;
+  vUv      = normal.xy;        // normal repurposed as corner offset
 
   vec4 viewPos = modelViewMatrix * vec4(position, 1.0);
 
-  // NDC radius: scale in world units / perspective depth
+  // NDC radius: world-space scale / perspective depth
   float ndcRadius = uPointScale * aScale / max(-viewPos.z, 0.0001);
 
   vec4 clipPos = projectionMatrix * viewPos;
 
-  // Correct aspect so the billboard is circular in pixels:
+  // Aspect correction so the billboard is circular in screen pixels.
   // projectionMatrix[1][1] / projectionMatrix[0][0] = (w/h) for standard persp.
   float aspectCorrect = projectionMatrix[1][1] / projectionMatrix[0][0];
 
@@ -61,9 +53,8 @@ void main() {
 `;
 
 // ─── Fragment Shader ──────────────────────────────────────────────────────────
+// ShaderMaterial aliases gl_FragColor to pc_fragColor automatically.
 const fragmentShader = /* glsl */ `
-precision highp float;
-
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vOpacity;
@@ -72,11 +63,11 @@ void main() {
   float r2 = dot(vUv, vUv);
   if (r2 > 1.0) discard;
 
-  // Gaussian falloff — soft edge, fully opaque centre
+  // Gaussian falloff — soft edges, fully opaque at centre
   float alpha = exp(-3.0 * r2) * vOpacity;
   if (alpha < 0.003) discard;
 
-  // Premultiplied alpha
+  // Premultiplied alpha for correct over-compositing
   gl_FragColor = vec4(vColor * alpha, alpha);
 }
 `;
@@ -85,7 +76,7 @@ void main() {
 export class SplatRenderer {
   mesh: THREE.Mesh;
   private geometry: THREE.BufferGeometry;
-  private material: THREE.RawShaderMaterial;
+  private material: THREE.ShaderMaterial;
   private vertexCount: number;
   private positions: Float32Array;
   private sortedIndices: Uint32Array;
@@ -97,6 +88,7 @@ export class SplatRenderer {
 
     const QUAD_VERTS   = 4;
     const QUAD_INDICES = 6;
+    // Corner offsets stored in the 'normal' attribute (z=0, unused)
     const CORNERS: [number, number][] = [[-1, 1], [1, 1], [1, -1], [-1, -1]];
 
     const posArr     = new Float32Array(n * QUAD_VERTS * 3);
@@ -114,7 +106,7 @@ export class SplatRenderer {
     const y = data['y'] ?? new Float32Array(n);
     const z = data['z'] ?? new Float32Array(n);
 
-    // Color: SH DC coefficients or rgb channels
+    // Colour: prefer SH DC coefficients, then uint8 rgb
     const rCh = data['f_dc_0'] ?? data['red'] ?? data['diffuse_red'] ?? null;
     const gCh = data['f_dc_1'] ?? data['green'] ?? data['diffuse_green'] ?? null;
     const bCh = data['f_dc_2'] ?? data['blue'] ?? data['diffuse_blue'] ?? null;
@@ -124,7 +116,6 @@ export class SplatRenderer {
     const sy      = data['scale_1'] ?? null;
     const sz      = data['scale_2'] ?? null;
 
-    // Detect if color channel is uint8 [0,255] or float (SH / normalised)
     const isUcharColor = !!(rCh && rCh.length > 0 && rCh[0] > 1.5);
 
     for (let i = 0; i < n; i++) {
@@ -133,14 +124,12 @@ export class SplatRenderer {
       this.positions[i * 3 + 1] = py;
       this.positions[i * 3 + 2] = pz;
 
-      // ── Color ──────────────────────────────────────────────────────────
+      // ── Colour ─────────────────────────────────────────────────────────
       // SH DC → linear RGB: color ≈ 0.5 + coeff × C0 (C0 = 1/(2√π) ≈ 0.28209)
-      let cr = 0.85, cg = 0.65, cb = 0.25; // warm gold fallback
+      let cr = 0.85, cg = 0.65, cb = 0.25;
       if (rCh && gCh && bCh) {
         if (isUcharColor) {
-          cr = rCh[i] / 255;
-          cg = gCh[i] / 255;
-          cb = bCh[i] / 255;
+          cr = rCh[i] / 255; cg = gCh[i] / 255; cb = bCh[i] / 255;
         } else {
           cr = Math.min(1, Math.max(0, 0.5 + rCh[i] * 0.2820948));
           cg = Math.min(1, Math.max(0, 0.5 + gCh[i] * 0.2820948));
@@ -151,18 +140,12 @@ export class SplatRenderer {
       // ── Opacity ────────────────────────────────────────────────────────
       // 3DGS stores logit(opacity); convert with sigmoid
       let op = 0.8;
-      if (opacity) {
-        op = 1.0 / (1.0 + Math.exp(-opacity[i]));
-      }
+      if (opacity) op = 1.0 / (1.0 + Math.exp(-opacity[i]));
 
       // ── Scale ──────────────────────────────────────────────────────────
-      // 3DGS stores log(scale); use exp(max axis) as billboard half-width.
-      // No artificial clamp — keep the true Gaussian size.
-      let scale = 1.0; // placeholder; overridden by setPointScale() if no data
-      if (sx && sy && sz) {
-        const maxLogScale = Math.max(sx[i], sy[i], sz[i]);
-        scale = Math.exp(maxLogScale);
-      }
+      // 3DGS stores log(scale); use exp(max axis) as billboard half-width
+      let scale = 0.003;
+      if (sx && sy && sz) scale = Math.exp(Math.max(sx[i], sy[i], sz[i]));
 
       for (let q = 0; q < QUAD_VERTS; q++) {
         const vi = i * QUAD_VERTS + q;
@@ -181,12 +164,9 @@ export class SplatRenderer {
 
       const ib = i * QUAD_INDICES;
       const vb = i * QUAD_VERTS;
-      indexArr[ib]     = vb;
-      indexArr[ib + 1] = vb + 1;
-      indexArr[ib + 2] = vb + 2;
-      indexArr[ib + 3] = vb;
-      indexArr[ib + 4] = vb + 2;
-      indexArr[ib + 5] = vb + 3;
+      indexArr[ib]     = vb;     indexArr[ib + 1] = vb + 1;
+      indexArr[ib + 2] = vb + 2; indexArr[ib + 3] = vb;
+      indexArr[ib + 4] = vb + 2; indexArr[ib + 5] = vb + 3;
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -198,7 +178,10 @@ export class SplatRenderer {
     geometry.setIndex(new THREE.BufferAttribute(indexArr, 1));
     this.geometry = geometry;
 
-    const material = new THREE.RawShaderMaterial({
+    // ShaderMaterial (not Raw) — three.js handles GLSL version compat,
+    // built-in uniforms (modelViewMatrix, projectionMatrix) and attributes
+    // (position, normal) automatically.
+    const material = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
       transparent: true,
@@ -220,19 +203,15 @@ export class SplatRenderer {
 
   /**
    * Called from SceneCanvas once scene bounds are known.
-   * `halfMaxDim` is half the bounding-box max dimension.
-   *
-   * uPointScale compensates for scenes where the gaussian sigma is very small
-   * relative to the scene size (common in real 3DGS captures).
-   * Target: splats render at ~15–30px radius on screen.
+   * Boost uPointScale for small scenes where gaussian sigma is tiny relative
+   * to the orbit distance.
    */
   setPointScale(halfMaxDim: number): void {
-    // For small scenes (halfMaxDim < 0.5 world units) boost more aggressively.
     const boost = Math.max(3.0, 0.5 / Math.max(halfMaxDim, 0.0001));
     this.material.uniforms['uPointScale'].value = boost;
   }
 
-  /** Back-to-front sort — throttled by SORT_INTERVAL frames. */
+  /** Back-to-front sort — throttled by SORT_INTERVAL. */
   sort(camera: THREE.Camera): void {
     this.frameCount++;
     if (this.frameCount % SORT_INTERVAL !== 0) return;
@@ -249,23 +228,18 @@ export class SplatRenderer {
       const dz = this.positions[i * 3 + 2] - cz;
       depths[i] = dx * dx + dy * dy + dz * dz;
     }
-
     this.sortedIndices.sort((a, b) => depths[b] - depths[a]);
 
     const QUAD_VERTS   = 4;
     const QUAD_INDICES = 6;
     const indexArr = new Uint32Array(n * QUAD_INDICES);
-
     for (let si = 0; si < n; si++) {
       const i  = this.sortedIndices[si];
       const ib = si * QUAD_INDICES;
       const vb = i * QUAD_VERTS;
-      indexArr[ib]     = vb;
-      indexArr[ib + 1] = vb + 1;
-      indexArr[ib + 2] = vb + 2;
-      indexArr[ib + 3] = vb;
-      indexArr[ib + 4] = vb + 2;
-      indexArr[ib + 5] = vb + 3;
+      indexArr[ib]     = vb;     indexArr[ib + 1] = vb + 1;
+      indexArr[ib + 2] = vb + 2; indexArr[ib + 3] = vb;
+      indexArr[ib + 4] = vb + 2; indexArr[ib + 5] = vb + 3;
     }
 
     const indexAttr = this.geometry.index as THREE.BufferAttribute;
