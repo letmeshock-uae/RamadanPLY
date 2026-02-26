@@ -12,12 +12,18 @@ const SceneCanvas = dynamic(() => import('./SceneCanvas'), { ssr: false });
 type Mode = 'ramadan' | 'eid';
 
 function useReducedMotionPref(): [boolean, () => void] {
-  const [reduced, setReduced] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
+  // Start with false to match server-rendered HTML (avoids hydration mismatch).
+  // Read browser APIs only in useEffect, after hydration completes.
+  const [reduced, setReduced] = useState<boolean>(false);
+
+  useEffect(() => {
     const stored = localStorage.getItem('reducedMotion');
-    if (stored !== null) return stored === 'true';
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  });
+    if (stored !== null) {
+      setReduced(stored === 'true');
+    } else {
+      setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    }
+  }, []);
 
   const toggle = useCallback(() => {
     setReduced((v) => {
