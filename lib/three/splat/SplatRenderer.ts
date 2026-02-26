@@ -142,7 +142,7 @@ export class SplatRenderer {
       // ── Scale ──────────────────────────────────────────────────────────
       // 3DGS stores log(scale); use exp(max axis) as billboard half-width
       let scale = 0.003;
-      if (sx && sy && sz) scale = Math.exp(Math.max(sx[i], sy[i], sz[i]));
+      if (sx && sy && sz) scale = Math.exp(Math.max(sx[i], sy[i], sz[i])) * 0.5; // Reduced multiplier to make it less fluffy
 
       for (let q = 0; q < QUAD_VERTS; q++) {
         const vi = i * QUAD_VERTS + q;
