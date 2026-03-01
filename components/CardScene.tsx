@@ -3,17 +3,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import HeadlineBehind from './HeadlineBehind';
 import OverlayLogos from './OverlayLogos';
-import Controls from './Controls';
 import Toast from './Toast';
 
 // SceneCanvas uses WebGL — must be client-only
 const SceneCanvas = dynamic(() => import('./SceneCanvas'), { ssr: false });
 
-type Mode = 'ramadan' | 'eid';
-
-function useReducedMotionPref(): [boolean, () => void] {
-  // Start with false to match server-rendered HTML (avoids hydration mismatch).
-  // Read browser APIs only in useEffect, after hydration completes.
+function useReducedMotionPref(): [boolean] {
   const [reduced, setReduced] = useState<boolean>(false);
 
   useEffect(() => {
@@ -25,21 +20,12 @@ function useReducedMotionPref(): [boolean, () => void] {
     }
   }, []);
 
-  const toggle = useCallback(() => {
-    setReduced((v) => {
-      const next = !v;
-      localStorage.setItem('reducedMotion', String(next));
-      return next;
-    });
-  }, []);
-
-  return [reduced, toggle];
+  return [reduced];
 }
 
 export default function CardScene() {
-  const [mode, setMode] = useState<Mode>('ramadan');
-  const [reducedMotion, toggleReducedMotion] = useReducedMotionPref();
-  const [toast, setToast] = useState<string | null>(null);
+  const [reducedMotion] = useReducedMotionPref();
+  const [toast] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   // Pointer tracking for parallax
@@ -55,19 +41,6 @@ export default function CardScene() {
     });
   }, []);
 
-  const handleModeToggle = useCallback(() => {
-    setMode((m) => (m === 'ramadan' ? 'eid' : 'ramadan'));
-  }, []);
-
-  const handleShare = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      setToast('Link copied!');
-    } catch {
-      setToast('Could not copy link');
-    }
-  }, []);
-
   const handleLoad = useCallback(() => {
     setLoaded(true);
   }, []);
@@ -75,12 +48,14 @@ export default function CardScene() {
   return (
     <div
       ref={cardRef}
-      className="relative w-full h-full overflow-hidden bg-[#0d0a1a]"
+      className="relative w-full h-full overflow-hidden"
+      style={{
+        background: 'radial-gradient(circle at 50% 50%, #13374F 0%, #0C0B19 100%)',
+      }}
       onPointerMove={handlePointerMove}
     >
-      {/* ── Layer 0: background headline ── */}
+      {/* ── Layer 0: background headline SVGs ── */}
       <HeadlineBehind
-        mode={mode}
         pointerX={pointer.x}
         pointerY={pointer.y}
         reducedMotion={reducedMotion}
@@ -95,25 +70,18 @@ export default function CardScene() {
         style={{
           zIndex: 1,
           background:
-            'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(13,10,26,0.65) 100%)',
+            'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(12,11,25,0.65) 100%)',
         }}
       />
 
-      {/* ── Layer 2: logos + controls ── */}
+      {/* ── Layer 2: logos ── */}
       <OverlayLogos />
-      <Controls
-        mode={mode}
-        reducedMotion={reducedMotion}
-        onModeToggle={handleModeToggle}
-        onReducedMotionToggle={toggleReducedMotion}
-        onShare={handleShare}
-      />
 
       {/* ── Loader ── */}
       {!loaded && (
         <div
-          className="absolute inset-0 flex items-center justify-center bg-[#0d0a1a]"
-          style={{ zIndex: 10 }}
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ zIndex: 10, background: 'radial-gradient(circle at 50% 50%, #13374F 0%, #0C0B19 100%)' }}
         >
           <div className="flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
@@ -123,7 +91,7 @@ export default function CardScene() {
       )}
 
       {/* ── Toast ── */}
-      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
+      {toast && <Toast message={toast} onDone={() => { }} />}
     </div>
   );
 }

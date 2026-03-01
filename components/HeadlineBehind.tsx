@@ -1,24 +1,18 @@
 'use client';
-import { playfair } from '@/app/fonts';
 
 interface HeadlineBehindProps {
-  mode: 'ramadan' | 'eid';
   pointerX: number; // -0.5 to 0.5 normalised
   pointerY: number;
   reducedMotion: boolean;
 }
 
 export default function HeadlineBehind({
-  mode,
   pointerX,
   pointerY,
   reducedMotion,
 }: HeadlineBehindProps) {
   const parallaxX = reducedMotion ? 0 : pointerX * 24;
   const parallaxY = reducedMotion ? 0 : pointerY * 12;
-
-  const mainText = mode === 'ramadan' ? 'Ramadan Kareem' : 'Eid Mubarak';
-  const arabicText = mode === 'ramadan' ? 'رمضان كريم' : 'عيد مبارك';
 
   return (
     <div
@@ -30,23 +24,24 @@ export default function HeadlineBehind({
           transform: `translate(${parallaxX}px, ${parallaxY}px)`,
           transition: reducedMotion ? 'none' : 'transform 0.1s ease-out',
         }}
-        className="text-center"
+        className="flex flex-col items-center gap-6"
       >
-        <h1
-          className={`${playfair.className} text-[clamp(3rem,10vw,9rem)] font-bold leading-none
-                       text-white/15 tracking-wide`}
-          aria-label={mainText}
-        >
-          {mainText}
-        </h1>
-        <p
-          className={`${playfair.className} text-[clamp(1.5rem,4vw,4rem)] font-medium
-                       text-white/10 mt-2 tracking-widest`}
-          dir="rtl"
-          aria-hidden="true"
-        >
-          {arabicText}
-        </p>
+        {/* Ramadan Kareem SVG */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/ramadan-kareem.svg"
+          alt="Ramadan Kareem"
+          className="w-[clamp(280px,55vw,820px)] h-auto opacity-90"
+          draggable={false}
+        />
+        {/* Ramadan SVG */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/ramadan.svg"
+          alt="Ramadan"
+          className="w-[clamp(140px,22vw,340px)] h-auto opacity-80"
+          draggable={false}
+        />
       </div>
     </div>
   );
