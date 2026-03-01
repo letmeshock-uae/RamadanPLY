@@ -11,8 +11,8 @@ export default function HeadlineBehind({
   pointerY,
   reducedMotion,
 }: HeadlineBehindProps) {
-  const parallaxX = reducedMotion ? 0 : pointerX * 24;
-  const parallaxY = reducedMotion ? 0 : pointerY * 12;
+  const parallaxX = reducedMotion ? 0 : -pointerX * 8;
+  const parallaxY = reducedMotion ? 0 : -pointerY * 5;
 
   return (
     <div

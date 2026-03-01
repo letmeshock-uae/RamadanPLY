@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import HeadlineBehind from './HeadlineBehind';
 import OverlayLogos from './OverlayLogos';
+import ParticleBg from './ParticleBg';
 import Toast from './Toast';
 
 // SceneCanvas uses WebGL — must be client-only
@@ -54,6 +55,9 @@ export default function CardScene() {
       }}
       onPointerMove={handlePointerMove}
     >
+      {/* ── Layer -1: particle dots ── */}
+      <ParticleBg pointerX={pointer.x} pointerY={pointer.y} />
+
       {/* ── Layer 0: background headline SVGs ── */}
       <HeadlineBehind
         pointerX={pointer.x}

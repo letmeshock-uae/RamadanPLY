@@ -12,7 +12,7 @@ export default function OverlayLogos() {
         <img
           src="/brand/datum.svg"
           alt="Datum"
-          className="h-10 sm:h-12 w-auto opacity-90"
+          className="h-[27px] sm:h-8 w-auto opacity-90"
           draggable={false}
         />
       </div>
