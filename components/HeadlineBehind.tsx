@@ -31,7 +31,7 @@ export default function HeadlineBehind({
         <img
           src="/brand/ramadan-kareem.svg"
           alt="Ramadan Kareem"
-          className="w-[clamp(280px,55vw,820px)] h-auto opacity-90"
+          className="w-[clamp(364px,71.5vw,1066px)] h-auto opacity-90"
           draggable={false}
         />
         {/* Ramadan SVG */}
@@ -39,7 +39,7 @@ export default function HeadlineBehind({
         <img
           src="/brand/ramadan.svg"
           alt="Ramadan"
-          className="w-[clamp(140px,22vw,340px)] h-auto opacity-80"
+          className="w-[clamp(182px,28.6vw,442px)] h-auto opacity-80"
           draggable={false}
         />
       </div>
