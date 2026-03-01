@@ -78,7 +78,7 @@ export default function SceneCanvas({ reducedMotion, onLoad }: SceneCanvasProps)
 
         // Offset center to position the model vertically
         // Positive Y center means camera looks UP, pushing the model DOWN.
-        const center = new THREE.Vector3(0, maxDim * 0.15, 0);
+        const center = new THREE.Vector3(0, maxDim * 0.06, 0);
 
         rig.setOrbit(center, orbitRadius);
 
